@@ -9,8 +9,9 @@ class QueryRequest(BaseModel):
     user_id: str = Field("anonymous", min_length=1, max_length=100)
     execute: bool = True
     max_rows: Optional[int] = Field(None, ge=1, le=5000)
+    datasource: str = "primary"  # Multi-datasource support
 
-    @validator("question", "tenant_id", "user_id")
+    @validator("question", "tenant_id", "user_id", "datasource")
     def trim_values(cls, value):
         return value.strip()
 
@@ -33,3 +34,4 @@ class QueryResponse(BaseModel):
     execution_ms: Optional[float] = None
     model: str
     warnings: List[str] = Field(default_factory=list)
+    datasource: str = "primary"  # Track which datasource was used

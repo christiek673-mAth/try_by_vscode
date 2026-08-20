@@ -158,4 +158,81 @@ pytest -q
 
 ## License
 
+
+---
+
+## 企业级增强功能 (v0.3.0)
+
+### 多数据源支持
+
+系统现在支持同时连接多个数据源，每个数据源有独立的连接池和健康检查。
+
+**配置示例（.env）：**
+
+```bash
+DATASOURCES='{"postgres_prod": {"type": "postgresql", "url": "postgresql://readonly:pass@prod.example.com:5432/analytics", "pool_size": 10, "read_only": true, "ssl_required": true}}'
+```
+
+**支持的数据源类型：** PostgreSQL、MySQL、Snowflake、SQLite
+
+### JWT 认证与 RBAC 授权
+
+**启用认证：**
+
+```bash
+AUTH_ENABLED=true
+JWT_SECRET=your-secret-key-here
+REQUIRE_TENANT_CLAIM=true
+```
+
+**内置角色：** admin（完全权限）、analyst（查询+目录）、viewer（仅目录）、anonymous（认证禁用时）
+
+**使用 JWT 查询：**
+
+```bash
+curl -X POST http://localhost:8000/v1/query \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{"question": "统计本月订单"}'
+```
+
+### 细粒度权限控制
+
+支持动态表列权限：列级白名单/黑名单、行级过滤、角色权限聚合。
+
+### 安全加固
+
+- **IP 白名单**：`IP_WHITELIST=192.168.1.0/24,10.0.0.0/8`
+- **速率限制**：`RATE_LIMIT_PER_MINUTE=60`
+- **增强审计**：记录用户身份、IP、角色、PII 检测、查询性能
+
+### 新增 API
+
+- **GET /v1/datasources**（admin）：列出所有数据源
+- **GET /health**：现在包含认证状态和数据源健康状态
+
+### 测试覆盖
+
+新增 11 个测试用例，总计 **27 个测试**，覆盖认证、授权、权限引擎、数据源管理。
+
+### 生产部署建议
+
+1. 启用 JWT 认证并配置企业 SSO/OIDC
+2. 配置多数据源，使用只读副本
+3. 设置 IP 白名单限制访问来源
+4. 定制角色和表列权限规则
+5. 集成日志系统（ELK/Splunk/DataDog）
+6. 配置监控告警（失败率、PII 访问、异常 IP）
+
+### 迁移指南 (v0.2.0 → v0.3.0)
+
+1. 安装新依赖：`pip install -r requirements.txt`
+2. 更新 .env 配置：参考 `.env.example` 添加新配置项
+3. 测试兼容性：`pytest tests/`
+4. 可选启用认证：`AUTH_ENABLED=true`
+
+**Breaking Changes：**
+- `QueryRequest` 新增 `datasource` 字段（默认 `"primary"`）
+- `QueryResponse` 新增 `datasource` 字段
+- 审计日志格式扩展（向后兼容）
+
 本项目基于 [MIT License](LICENSE) 发布。
