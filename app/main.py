@@ -4,6 +4,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 
 from app.audit import AuditLogger
 from app.auth import AuthConfig, JWTAuthenticator, Permission, RBACAuthorizer, UserContext
+from app.cache import QueryCache
 from app.catalog import Catalog
 from app.config import settings
 from app.database import create_engine_for_url, initialize_demo_database
@@ -12,8 +13,11 @@ from app.llm import LLMError, build_model
 from app.models import QueryRequest, QueryResponse, SourceTable
 from app.permissions import PermissionEngine, create_default_permissions
 from app.policy import SQLPolicy, SQLPolicyError
+from app.prompt_guard import PromptGuard, PromptInjectionError, create_safe_system_prompt
+from app.query_history import QueryHistory, QueryHistoryEntry
 from app.security import IPWhitelistMiddleware, RateLimitMiddleware
 from app.service import QueryService
+from app.token_blacklist import TokenBlacklist
 
 
 def create_app(runtime_settings=settings) -> FastAPI:
@@ -52,6 +56,28 @@ def create_app(runtime_settings=settings) -> FastAPI:
         runtime_settings.llm_model,
         runtime_settings.llm_timeout_seconds,
     )
+    
+    # Initialize prompt guard
+    prompt_guard = PromptGuard(
+        max_length=runtime_settings.prompt_max_length,
+        strict_mode=runtime_settings.prompt_strict_mode,
+    ) if runtime_settings.prompt_guard_enabled else None
+    
+    # Initialize cache
+    query_cache = QueryCache(
+        redis_url=runtime_settings.redis_url if runtime_settings.cache_enabled else None,
+        default_ttl=runtime_settings.cache_ttl_seconds,
+    ) if runtime_settings.cache_enabled else None
+    
+    # Initialize query history
+    query_history = QueryHistory(
+        retention_days=runtime_settings.query_history_retention_days,
+    ) if runtime_settings.query_history_enabled else None
+    
+    # Initialize token blacklist
+    token_blacklist = TokenBlacklist(
+        redis_url=runtime_settings.redis_url if runtime_settings.auth_enabled else None,
+    ) if runtime_settings.auth_enabled else None
 
     # Initialize authentication and authorization
     auth_config = AuthConfig(
@@ -65,7 +91,7 @@ def create_app(runtime_settings=settings) -> FastAPI:
         roles_claim_key=runtime_settings.roles_claim_key,
         permissions_claim_key=runtime_settings.permissions_claim_key,
     )
-    authenticator = JWTAuthenticator(auth_config)
+    authenticator = JWTAuthenticator(auth_config, token_blacklist=token_blacklist)
     authorizer = RBACAuthorizer()
     permission_engine = create_default_permissions()
 
@@ -79,11 +105,14 @@ def create_app(runtime_settings=settings) -> FastAPI:
         runtime_settings.catalog_top_k,
         datasource_registry=datasource_registry if runtime_settings.datasources else None,
         permission_engine=permission_engine,
+        query_cache=query_cache,
+        query_history=query_history,
+        prompt_guard=prompt_guard,
     )
 
     application = FastAPI(
         title="Enterprise Text-to-SQL",
-        version="0.3.0",
+        version="0.4.0",
         description="Multi-datasource policy-enforced natural-language analytics with enterprise security.",
     )
 
@@ -99,12 +128,20 @@ def create_app(runtime_settings=settings) -> FastAPI:
     @application.get("/health")
     def health():
         datasource_health = datasource_registry.health_check_all() if datasource_registry else {}
+        cache_stats = query_cache.stats() if query_cache else {"backend": "disabled"}
+        history_stats = query_history.stats() if query_history else {"enabled": False}
+        blacklist_stats = token_blacklist.stats() if token_blacklist else {"enabled": False}
+        
         return {
             "status": "ok",
             "model": model.name,
             "tables": len(catalog.tables),
             "auth_enabled": runtime_settings.auth_enabled,
             "datasources": datasource_health,
+            "cache": cache_stats,
+            "query_history": history_stats,
+            "token_blacklist": blacklist_stats,
+            "prompt_guard_enabled": runtime_settings.prompt_guard_enabled,
         }
 
     @application.get("/v1/catalog", response_model=List[SourceTable])
@@ -123,6 +160,8 @@ def create_app(runtime_settings=settings) -> FastAPI:
         
         try:
             return service.answer(request, user_context=user)
+        except PromptInjectionError as exc:
+            raise HTTPException(status_code=400, detail=f"Security violation: {exc}")
         except SQLPolicyError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
         except LLMError:
@@ -136,6 +175,30 @@ def create_app(runtime_settings=settings) -> FastAPI:
         if datasource_registry:
             return {"datasources": list(datasource_registry._datasources.keys())}
         return {"datasources": ["primary"]}
+    
+    @application.get("/v1/history", response_model=List[QueryHistoryEntry])
+    def get_query_history(
+        limit: int = 50,
+        offset: int = 0,
+        user: UserContext = Depends(get_current_user)
+    ):
+        """Get user's query history."""
+        authorizer.require_permission(user, Permission.QUERY_EXECUTE)
+        if not query_history:
+            raise HTTPException(status_code=404, detail="Query history not enabled")
+        return query_history.get_user_history(user.user_id, user.tenant_id, limit, offset)
+    
+    @application.get("/v1/history/{query_id}", response_model=QueryHistoryEntry)
+    def get_query_by_id(query_id: str, user: UserContext = Depends(get_current_user)):
+        """Get specific query from history."""
+        authorizer.require_permission(user, Permission.QUERY_EXECUTE)
+        if not query_history:
+            raise HTTPException(status_code=404, detail="Query history not enabled")
+        
+        entry = query_history.get_by_id(query_id)
+        if not entry or entry.user_id != user.user_id or entry.tenant_id != user.tenant_id:
+            raise HTTPException(status_code=404, detail="Query not found")
+        return entry
 
     return application
 

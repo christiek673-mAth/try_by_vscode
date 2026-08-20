@@ -37,6 +37,20 @@ class Settings(BaseSettings):
     ip_whitelist: List[str] = Field(default_factory=list)
     rate_limit_per_minute: int = Field(60, gt=0)
     enable_query_cost_tracking: bool = False
+    
+    # Caching
+    redis_url: str = ""
+    cache_enabled: bool = True
+    cache_ttl_seconds: int = Field(3600, gt=0)
+    
+    # Prompt injection protection
+    prompt_guard_enabled: bool = True
+    prompt_max_length: int = Field(1000, gt=0, le=5000)
+    prompt_strict_mode: bool = True
+    
+    # Query history
+    query_history_enabled: bool = True
+    query_history_retention_days: int = Field(90, gt=0)
 
     @validator("sensitive_columns", "allowed_tables", "ip_whitelist", pre=True)
     def split_csv(cls, value):

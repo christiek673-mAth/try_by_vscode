@@ -51,9 +51,10 @@ class AuthConfig:
 class JWTAuthenticator:
     """JWT token validation and user context extraction."""
 
-    def __init__(self, config: AuthConfig):
+    def __init__(self, config: AuthConfig, token_blacklist=None):
         self.config = config
         self.security = HTTPBearer(auto_error=False)
+        self.token_blacklist = token_blacklist
 
     async def authenticate(self, request: Request) -> Optional[UserContext]:
         """Extract and validate JWT from request."""
@@ -79,6 +80,18 @@ class JWTAuthenticator:
         exp = payload.get("exp")
         if exp and exp < time.time():
             raise HTTPException(status_code=401, detail="Token expired")
+        
+        # Check if token is revoked
+        if self.token_blacklist:
+            jti = payload.get("jti", "")
+            if jti and self.token_blacklist.is_revoked(jti):
+                raise HTTPException(status_code=401, detail="Token has been revoked")
+            
+            # Check if user's all tokens are revoked
+            user_id = payload.get("sub", "")
+            iat = payload.get("iat", 0)
+            if user_id and self.token_blacklist.is_user_revoked(user_id, iat):
+                raise HTTPException(status_code=401, detail="User session has been revoked")
 
         # Extract claims
         user_id = payload.get("sub")
