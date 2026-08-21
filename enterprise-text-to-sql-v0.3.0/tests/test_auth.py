@@ -2,7 +2,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.auth import AuthConfig, JWTAuthenticator, Permission, RBACAuthorizer, UserContext
+from app.auth import Permission, RBACAuthorizer, UserContext
 from app.config import Settings
 from app.main import create_app
 

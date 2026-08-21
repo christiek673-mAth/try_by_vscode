@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import List
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 
@@ -10,7 +10,7 @@ from app.database import create_engine_for_url, initialize_demo_database
 from app.datasource import DataSourceConfig, DataSourceRegistry, DataSourceType, create_datasource
 from app.llm import LLMError, build_model
 from app.models import QueryRequest, QueryResponse, SourceTable
-from app.permissions import PermissionEngine, create_default_permissions
+from app.permissions import create_default_permissions
 from app.policy import SQLPolicy, SQLPolicyError
 from app.security import IPWhitelistMiddleware, RateLimitMiddleware
 from app.service import QueryService

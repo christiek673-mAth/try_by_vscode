@@ -221,8 +221,9 @@ python-jose[cryptography]>=3.3.0
 ### 安装步骤
 
 ```bash
-# 克隆或下载本发布包
-cd enterprise-text-to-sql-v0.3.0
+# 克隆仓库并进入本发布包
+git clone https://github.com/christiek673-mAth/try_by_vscode.git
+cd try_by_vscode/enterprise-text-to-sql-v0.3.0
 
 # 创建虚拟环境
 python3 -m venv .venv
@@ -232,7 +233,7 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
 # 配置环境变量
-cp .env.example .env
+cp config/.env.example .env
 # 编辑 .env 文件，配置数据源和认证信息
 
 # 启动服务
@@ -261,7 +262,7 @@ docker run -d \
    ```
 
 2. **更新配置文件**
-   - 参考 `.env.example` 添加新配置项
+   - 参考 `config/.env.example` 添加新配置项
    - 至少需要配置：`DATASOURCES`、`DEFAULT_DATASOURCE`
 
 3. **测试兼容性**
@@ -315,9 +316,13 @@ enterprise-text-to-sql-v0.3.0/
 │   ├── test_permissions.py  # 权限测试
 │   ├── test_datasource.py   # 数据源测试
 │   └── ...                  # 其他测试
-├── .env.example             # 配置模板
+├── config/                   # 配置模板
+│   └── .env.example
+├── docs/                     # 项目文档
+│   ├── CONTRIBUTING.md
+│   ├── RELEASE_NOTES.md      # 本文件
+│   └── SECURITY.md
 ├── README.md                # 项目文档
-├── RELEASE_NOTES.md         # 本文件
 ├── requirements.txt         # Python 依赖
 ├── Dockerfile               # Docker 镜像
 └── ...                      # 其他配置文件
@@ -335,7 +340,7 @@ enterprise-text-to-sql-v0.3.0/
 
 ## License
 
-本项目基于 [MIT License](LICENSE) 发布。
+本项目基于 [MIT License](../LICENSE) 发布。
 
 ---
 

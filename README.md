@@ -6,6 +6,8 @@
 
 **让业务人员用自然语言查询数据库，但不给 DBA 制造麻烦。**
 
+> 当前主项目位于仓库根目录。历史独立版本 `v0.3.0` 已整理到 [enterprise-text-to-sql-v0.3.0/](enterprise-text-to-sql-v0.3.0/)，其中的说明文档位于其 `docs/` 目录。
+
 ---
 
 ## 💡 这是什么？
@@ -507,7 +509,7 @@ ruff check app tests
 
 ## 🔗 相关资源
 
-- 📦 [发布说明](RELEASE_NOTES.md)
+- 📦 [发布说明](RELEASE_NOTES_v0.4.0.md)
 - 🔐 [安全政策](SECURITY.md)
 - 🤝 [贡献指南](CONTRIBUTING.md)
 - 🐛 [问题反馈](https://github.com/christiek673-mAth/try_by_vscode/issues)

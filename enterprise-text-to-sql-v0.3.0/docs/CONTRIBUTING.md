@@ -2,6 +2,8 @@
 
 感谢你对 Enterprise Text-to-SQL 的关注。这个项目优先接受能提升安全性、可测试性、可观测性和数据库兼容性的改动。
 
+本文中的命令应从 `enterprise-text-to-sql-v0.3.0/` 子项目目录执行。
+
 ## 开发环境
 
 ```bash

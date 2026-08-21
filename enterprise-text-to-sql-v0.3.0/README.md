@@ -1,9 +1,11 @@
-# Enterprise Text-to-SQL
+# Enterprise Text-to-SQL v0.3.0
 
-[![CI](https://github.com/christiek673-mAth/try_by_vscode/actions/workflows/ci.yml/badge.svg)](https://github.com/christiek673-mAth/try_by_vscode/actions/workflows/ci.yml)
+[![CI](https://github.com/christiek673-mAth/try_by_vscode/actions/workflows/enterprise-text-to-sql-v0.3.0.yml/badge.svg)](https://github.com/christiek673-mAth/try_by_vscode/actions/workflows/enterprise-text-to-sql-v0.3.0.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 一个面向企业分析场景的 Text-to-SQL 服务骨架：把自然语言问题转换为只读 SQL，并在执行前经过 SQL AST 策略检查、表访问控制、租户隔离和行数限制。返回结果会对配置的敏感列做脱敏，同时记录结构化审计事件。
+
+> 本版本作为独立子项目放在主仓库的 `enterprise-text-to-sql-v0.3.0/` 目录中。以下命令均在该目录内执行。
 
 > **状态：可运行的安全基础骨架。** 项目适合学习、内部原型和二次开发；它不是开箱即用的生产数据网关。生产部署必须配合身份认证、数据库原生权限、Row-Level Security、网络隔离和经过审核的元数据服务。
 
@@ -41,7 +43,7 @@ Metadata catalog -> relevant schema context -> LLM adapter
 
 ```bash
 git clone https://github.com/christiek673-mAth/try_by_vscode.git
-cd try_by_vscode
+cd try_by_vscode/enterprise-text-to-sql-v0.3.0
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements-dev.txt
@@ -72,7 +74,7 @@ docker run --rm -p 8000:8000 \
 
 ## 配置
 
-复制 `.env.example` 为 `.env` 后按需修改：
+复制 `config/.env.example` 为 `.env` 后按需修改：
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
@@ -145,7 +147,7 @@ ruff check app tests
 pytest -q
 ```
 
-项目通过 GitHub Actions 在 Python 3.8 和 3.11 上运行 lint 与测试。贡献规范见 [CONTRIBUTING.md](CONTRIBUTING.md)，安全问题请参阅 [SECURITY.md](SECURITY.md)。
+项目通过 GitHub Actions 在 Python 3.8 和 3.11 上运行 lint 与测试。贡献规范见 [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)，安全问题请参阅 [docs/SECURITY.md](docs/SECURITY.md)。
 
 ## Roadmap
 
@@ -226,7 +228,7 @@ curl -X POST http://localhost:8000/v1/query \
 ### 迁移指南 (v0.2.0 → v0.3.0)
 
 1. 安装新依赖：`pip install -r requirements.txt`
-2. 更新 .env 配置：参考 `.env.example` 添加新配置项
+2. 更新 .env 配置：参考 `config/.env.example` 添加新配置项
 3. 测试兼容性：`pytest tests/`
 4. 可选启用认证：`AUTH_ENABLED=true`
 
