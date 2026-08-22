@@ -1,6 +1,4 @@
 """Tests for query history."""
-import time
-
 from app.query_history import QueryHistory
 
 

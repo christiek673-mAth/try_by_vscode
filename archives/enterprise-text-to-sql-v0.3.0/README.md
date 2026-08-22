@@ -1,11 +1,10 @@
 # Enterprise Text-to-SQL v0.3.0
 
-[![CI](https://github.com/christiek673-mAth/try_by_vscode/actions/workflows/enterprise-text-to-sql-v0.3.0.yml/badge.svg)](https://github.com/christiek673-mAth/try_by_vscode/actions/workflows/enterprise-text-to-sql-v0.3.0.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 一个面向企业分析场景的 Text-to-SQL 服务骨架：把自然语言问题转换为只读 SQL，并在执行前经过 SQL AST 策略检查、表访问控制、租户隔离和行数限制。返回结果会对配置的敏感列做脱敏，同时记录结构化审计事件。
 
-> 本版本作为独立子项目放在主仓库的 `enterprise-text-to-sql-v0.3.0/` 目录中。以下命令均在该目录内执行。
+> 本版本作为历史快照保存在主仓库的 `archives/enterprise-text-to-sql-v0.3.0/` 目录中。以下命令均在该目录内执行。
 
 > **状态：可运行的安全基础骨架。** 项目适合学习、内部原型和二次开发；它不是开箱即用的生产数据网关。生产部署必须配合身份认证、数据库原生权限、Row-Level Security、网络隔离和经过审核的元数据服务。
 
@@ -43,7 +42,7 @@ Metadata catalog -> relevant schema context -> LLM adapter
 
 ```bash
 git clone https://github.com/christiek673-mAth/try_by_vscode.git
-cd try_by_vscode/enterprise-text-to-sql-v0.3.0
+cd try_by_vscode/archives/enterprise-text-to-sql-v0.3.0
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements-dev.txt

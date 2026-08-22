@@ -2,7 +2,7 @@ import json
 import os
 import threading
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 
 class AuditLogger:

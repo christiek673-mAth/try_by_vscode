@@ -223,7 +223,7 @@ python-jose[cryptography]>=3.3.0
 ```bash
 # 克隆仓库并进入本发布包
 git clone https://github.com/christiek673-mAth/try_by_vscode.git
-cd try_by_vscode/enterprise-text-to-sql-v0.3.0
+cd try_by_vscode/archives/enterprise-text-to-sql-v0.3.0
 
 # 创建虚拟环境
 python3 -m venv .venv
@@ -301,7 +301,7 @@ docker run -d \
 ## 文件清单
 
 ```
-enterprise-text-to-sql-v0.3.0/
+archives/enterprise-text-to-sql-v0.3.0/
 ├── app/                      # 应用核心代码
 │   ├── auth.py              # JWT 认证与 RBAC 授权
 │   ├── datasource.py        # 多数据源适配器

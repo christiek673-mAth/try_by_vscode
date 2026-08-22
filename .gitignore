@@ -7,9 +7,9 @@ __pycache__/
 .coverage
 coverage.xml
 htmlcov/
-data/*.db
+**/data/*.db
 *.db
 .DS_Store
 build/
 dist/
-data/*.jsonl
+**/data/*.jsonl
