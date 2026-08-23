@@ -1,0 +1,6 @@
+langchain-core>=0.3,<2.0
+langchain-chroma>=0.2,<2.0
+langchain-huggingface>=0.1,<2.0
+langchain-openai>=0.3,<2.0
+sentence-transformers>=3.0,<6.0
+chromadb>=0.5,<2.0

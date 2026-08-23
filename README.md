@@ -7,6 +7,7 @@
 | 项目 | 状态 | 说明 |
 | --- | --- | --- |
 | [Enterprise Text-to-SQL](projects/enterprise-text-to-sql/) | Active | 面向企业数据分析的安全 Text-to-SQL 服务，当前版本为 v0.4.0 |
+| [法律知识殿堂](projects/legal-mind-palace/) | Active | 面向法律工作者的个人 RAG 知识库：保留法规编、章、节、条层级上下文的法条检索与生成核心 |
 
 ## 历史归档
 
@@ -18,6 +19,7 @@
 try_by_vscode/
 ├── projects/                         # 独立项目
 │   └── enterprise-text-to-sql/       # 当前维护的 Enterprise Text-to-SQL
+│   └── legal-mind-palace/             # 法律工作者 RAG 知识殿堂
 ├── archives/                         # 历史版本快照
 │   └── enterprise-text-to-sql-v0.3.0/
 ├── .github/workflows/                # 仓库及项目 CI
@@ -40,6 +42,7 @@ make run
 ```
 
 更多功能、配置、API 和部署说明，请查看 [Enterprise Text-to-SQL 项目文档](projects/enterprise-text-to-sql/README.md)。
+法律法规检索与生成说明，请查看[法律知识殿堂项目文档](projects/legal-mind-palace/README.md)。
 
 ## 版本管理约定
 
