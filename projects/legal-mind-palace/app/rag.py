@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
+import json
 import os
 from pathlib import Path
 import shutil
@@ -48,6 +50,10 @@ class LegalRAGPipeline:
         self.rag_chain = None
 
     @property
+    def manifest_path(self) -> Path:
+        return self.persist_directory / "index-manifest.json"
+
+    @property
     def embeddings(self) -> Any:
         """延迟加载模型，确保纯 Markdown 解析和单元测试不下载大模型。"""
         if self._embeddings is None:
@@ -65,11 +71,15 @@ class LegalRAGPipeline:
         return self._embeddings
 
     def build_vector_store(self, documents: Sequence[Document], reset: bool = False) -> int:
-        """将法规 Document 幂等写入 Chroma，并返回本次索引的法条片段数。"""
-        if not documents:
-            raise ValueError("没有可写入的法条 Document。")
+        """按来源增量写入 Chroma；变更或删除来源时清理其陈旧向量。"""
         if reset:
             shutil.rmtree(self.persist_directory, ignore_errors=True)
+        if not documents:
+            if reset:
+                self.persist_directory.mkdir(parents=True, exist_ok=True)
+                self._write_manifest({})
+                return 0
+            raise ValueError("没有可写入的法条 Document。")
 
         chroma_class = self._chroma_class()
         self.persist_directory.mkdir(parents=True, exist_ok=True)
@@ -78,9 +88,23 @@ class LegalRAGPipeline:
             persist_directory=str(self.persist_directory),
             embedding_function=self.embeddings,
         )
-        self.vector_store.add_documents(
-            documents=list(documents), ids=[str(document.metadata["document_id"]) for document in documents]
-        )
+        documents_by_source = self._documents_by_source(documents)
+        manifest = {} if reset else self._load_manifest()
+        for source, source_documents in documents_by_source.items():
+            source_sha256 = str(source_documents[0].metadata.get("source_sha256", ""))
+            if manifest.get(source, {}).get("source_sha256") == source_sha256:
+                continue
+            self._delete_source(source)
+            self.vector_store.add_documents(
+                documents=source_documents,
+                ids=[str(document.metadata["document_id"]) for document in source_documents],
+            )
+            manifest[source] = self._manifest_entry(source_documents)
+
+        for deleted_source in set(manifest) - set(documents_by_source):
+            self._delete_source(deleted_source)
+            del manifest[deleted_source]
+        self._write_manifest(manifest)
         return len(documents)
 
     def load_vector_store(self) -> Any:
@@ -109,6 +133,8 @@ class LegalRAGPipeline:
                     (
                         f"--- [法条依据 {index}] ---",
                         f"来源: {metadata.get('source', '未知来源')}",
+                        f"权威来源: {metadata.get('source_url', '') or '未提供'}",
+                        f"效力状态: {metadata.get('legal_status', '') or '未提供'}",
                         f"层级路径: {metadata.get('hierarchy_path', '未知层级')}",
                         document.page_content,
                     )
@@ -168,6 +194,48 @@ class LegalRAGPipeline:
         if self.rag_chain is None:
             raise ValueError("RAG 链尚未初始化；请先调用 init_rag_chain()。")
         return self.rag_chain.invoke(question)
+
+    @staticmethod
+    def _documents_by_source(documents: Sequence[Document]) -> dict[str, list[Document]]:
+        grouped: dict[str, list[Document]] = {}
+        for document in documents:
+            source = str(document.metadata["source"])
+            grouped.setdefault(source, []).append(document)
+        return grouped
+
+    def _delete_source(self, source: str) -> None:
+        """通过 Chroma metadata where 条件清理某个来源的全部历史片段。"""
+        assert self.vector_store is not None
+        self.vector_store.delete(where={"source": source})
+
+    def _load_manifest(self) -> dict[str, dict[str, Any]]:
+        if not self.manifest_path.is_file():
+            return {}
+        try:
+            contents = json.loads(self.manifest_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as error:
+            raise ValueError(f"索引清单已损坏：{self.manifest_path}") from error
+        if not isinstance(contents, dict):
+            raise ValueError(f"索引清单格式无效：{self.manifest_path}")
+        return contents
+
+    def _write_manifest(self, manifest: dict[str, dict[str, Any]]) -> None:
+        self.persist_directory.mkdir(parents=True, exist_ok=True)
+        self.manifest_path.write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+
+    @staticmethod
+    def _manifest_entry(documents: Sequence[Document]) -> dict[str, Any]:
+        metadata = documents[0].metadata
+        return {
+            "source_sha256": str(metadata.get("source_sha256", "")),
+            "indexed_at": datetime.now(timezone.utc).isoformat(),
+            "document_count": len(documents),
+            "revision_version": str(metadata.get("revision_version", "")),
+            "last_updated_at": str(metadata.get("last_updated_at", "")),
+            "source_url": str(metadata.get("source_url", "")),
+        }
 
     @staticmethod
     def _chroma_class() -> Any:

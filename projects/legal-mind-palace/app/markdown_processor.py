@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from hashlib import sha256
+import json
 from pathlib import Path
 import re
-from typing import Iterable
+from typing import Any, Iterable, Mapping
+from zipfile import BadZipFile, ZipFile
 
 from langchain_core.documents import Document
 
@@ -21,6 +23,19 @@ DIVISION_PATTERN = re.compile(
     r"^(?P<division>第[〇零一二三四五六七八九十百千万亿\d]+(?P<kind>编|章|节))\s*(?P<title>.*)$"
 )
 DIVISION_KEYS = {"编": "part", "章": "chapter", "节": "section"}
+HEADING_LEVEL_KEYS = {2: "part", 3: "chapter", 4: "section"}
+LEGAL_METADATA_FIELDS = (
+    "issuing_authority",
+    "document_number",
+    "promulgation_date",
+    "effective_date",
+    "expiration_date",
+    "legal_status",
+    "revision_version",
+    "last_updated_at",
+    "source_url",
+    "jurisdiction",
+)
 
 
 @dataclass
@@ -47,6 +62,19 @@ class LegalHierarchy:
             for value in (self.law_name, self.part, self.chapter, self.section, article)
             if value
         )
+
+    def update_heading(self, level: int, value: str) -> bool:
+        """将未编号的 Markdown 目录按相对标题级别映射为法规层级。"""
+        key = HEADING_LEVEL_KEYS.get(level)
+        if key is None:
+            return False
+        setattr(self, key, value)
+        if key == "part":
+            self.chapter = ""
+            self.section = ""
+        elif key == "chapter":
+            self.section = ""
+        return True
 
 
 @dataclass
@@ -77,27 +105,57 @@ class LegalMarkdownProcessor:
         self.max_article_chars = max_article_chars
         self.overlap_paragraphs = overlap_paragraphs
 
-    def process_directory(self, source_dir: str | Path) -> list[Document]:
-        """递归读取目录内的 ``.md`` / ``.markdown`` 法规文件。"""
+    def process_directory(
+        self, source_dir: str | Path, metadata_by_source: Mapping[str, Mapping[str, Any]] | None = None
+    ) -> list[Document]:
+        """递归读取 Markdown，以及 ``laws.json`` / ``laws.json.zip`` 形式的法规快照。"""
         root = Path(source_dir).expanduser().resolve()
         if not root.is_dir():
             raise FileNotFoundError(f"法规目录不存在：{root}")
 
         files = sorted(
-            path for path in root.rglob("*") if path.suffix.lower() in {".md", ".markdown"}
+            path
+            for path in root.rglob("*")
+            if path.suffix.lower() in {".md", ".markdown", ".json"} or path.name.lower().endswith(".json.zip")
         )
-        return [document for path in files for document in self.process_file(path, root)]
+        metadata_by_source = metadata_by_source or {}
+        documents: list[Document] = []
+        for path in files:
+            relative_path = self._relative_source_path(path, root)
+            documents.extend(self.process_file(path, root, metadata_by_source.get(relative_path)))
+        return documents
 
-    def process_file(self, file_path: str | Path, source_root: str | Path | None = None) -> list[Document]:
+    def process_file(
+        self,
+        file_path: str | Path,
+        source_root: str | Path | None = None,
+        source_metadata: Mapping[str, Any] | None = None,
+    ) -> list[Document]:
         path = Path(file_path).expanduser().resolve()
         if not path.is_file():
             raise FileNotFoundError(f"法规文件不存在：{path}")
         relative_path = self._relative_source_path(path, source_root)
+        file_sha256 = self._file_sha256(path)
+        metadata = self._normalize_metadata(source_metadata, source_sha256=file_sha256)
+        if path.name.lower().endswith(".json.zip"):
+            return self._process_json_zip(path, relative_path, metadata)
+        if path.suffix.lower() == ".json":
+            return self._process_json_text(path.read_text(encoding="utf-8-sig"), relative_path, metadata)
         text = path.read_text(encoding="utf-8-sig")
-        return self.process_markdown(text, source_path=relative_path, fallback_law_name=path.stem)
+        return self.process_markdown(
+            text,
+            source_path=relative_path,
+            fallback_law_name=path.stem,
+            source_metadata=metadata,
+        )
 
     def process_markdown(
-        self, markdown_text: str, source_path: str = "memory.md", fallback_law_name: str = "未知法规"
+        self,
+        markdown_text: str,
+        source_path: str = "memory.md",
+        fallback_law_name: str = "未知法规",
+        source_metadata: Mapping[str, Any] | None = None,
+        document_identity: str | None = None,
     ) -> list[Document]:
         """将一个 Markdown 文本解析成可索引的完整法条 Document。"""
         law_name = self._find_law_name(markdown_text, fallback_law_name)
@@ -118,6 +176,8 @@ class LegalMarkdownProcessor:
                         hierarchy=hierarchy,
                         article=article_buffer.article,
                         source_path=source_path,
+                        source_metadata=source_metadata,
+                        document_identity=document_identity,
                     )
                 )
             article_buffer = None
@@ -144,9 +204,17 @@ class LegalMarkdownProcessor:
 
             if heading and heading.group("marks") == "#":
                 # H1 通常是法律名称。必须在识别法条之后处理，兼容少量以 # 标记条号的文件。
-                if article_buffer is None:
-                    hierarchy.law_name = candidate
+                flush_article()
+                hierarchy = LegalHierarchy(law_name=candidate)
                 continue
+
+            if heading:
+                # 实务语料常用“总则”“附则”等无编号标题；标题前的法条必须先落盘。
+                heading_level = len(heading.group("marks"))
+                if heading_level in HEADING_LEVEL_KEYS:
+                    flush_article()
+                    hierarchy.update_heading(heading_level, candidate)
+                    continue
 
             if article_buffer is not None:
                 article_buffer.lines.append(raw_line)
@@ -162,6 +230,8 @@ class LegalMarkdownProcessor:
                     article="",
                     source_path=source_path,
                     chunk_kind="preamble",
+                    source_metadata=source_metadata,
+                    document_identity=document_identity,
                 )
             )
         return documents
@@ -198,6 +268,8 @@ class LegalMarkdownProcessor:
         article: str,
         source_path: str,
         chunk_kind: str = "article",
+        source_metadata: Mapping[str, Any] | None = None,
+        document_identity: str | None = None,
     ) -> list[Document]:
         chunks = self._split_long_article(article_text)
         path = hierarchy.path(article)
@@ -211,14 +283,98 @@ class LegalMarkdownProcessor:
             "hierarchy_path": path,
             "chunk_kind": chunk_kind,
             "chunk_count": len(chunks),
+            **self._normalize_metadata(source_metadata),
         }
         docs = []
         for index, chunk in enumerate(chunks, start=1):
-            document_id = self._document_id(source_path, path, index, chunk)
+            document_id = self._document_id(document_identity or source_path, path, index, chunk)
             metadata = {**base_metadata, "chunk_index": index, "document_id": document_id}
             enhanced_content = f"【法律层级】{path}\n【条文内容】\n{chunk}"
             docs.append(Document(page_content=enhanced_content, metadata=metadata))
         return docs
+
+    def _process_json_zip(
+        self, path: Path, source_path: str, source_metadata: Mapping[str, Any]
+    ) -> list[Document]:
+        try:
+            with ZipFile(path) as archive:
+                json_names = [name for name in archive.namelist() if name.lower().endswith(".json")]
+                if len(json_names) != 1:
+                    raise ValueError("压缩包中必须恰有一个 JSON 文件。")
+                text = archive.read(json_names[0]).decode("utf-8-sig")
+        except (BadZipFile, OSError) as error:
+            raise ValueError(f"无法读取法规 JSON 压缩包：{path}；请确认 Git LFS 数据已实际下载。") from error
+        return self._process_json_text(text, source_path, source_metadata)
+
+    def _process_json_text(
+        self, text: str, source_path: str, source_metadata: Mapping[str, Any]
+    ) -> list[Document]:
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError as error:
+            raise ValueError(f"法规 JSON 格式无效：{source_path}") from error
+        records = payload.get("laws", []) if isinstance(payload, dict) else payload
+        if not isinstance(records, list):
+            raise ValueError(f"法规 JSON 顶层必须是数组或包含 laws 数组：{source_path}")
+
+        documents: list[Document] = []
+        for record_index, record in enumerate(records, start=1):
+            if not isinstance(record, dict) or not str(record.get("content", "")).strip():
+                continue
+            record_metadata = dict(source_metadata)
+            record_metadata.update(self._metadata_from_law_record(record))
+            record_metadata["source_sha256"] = str(source_metadata.get("source_sha256", ""))
+            record_id = str(record.get("id") or record_index)
+            documents.extend(
+                self.process_markdown(
+                    str(record["content"]),
+                    source_path=source_path,
+                    fallback_law_name=str(record.get("title") or f"法规记录 {record_id}"),
+                    source_metadata=record_metadata,
+                    document_identity=f"{source_path}#{record_id}",
+                )
+            )
+        return documents
+
+    @staticmethod
+    def _metadata_from_law_record(record: Mapping[str, Any]) -> dict[str, str]:
+        """映射全国人大法律法规库快照字段；未知状态保持原值，禁止猜测其法律含义。"""
+        links = record.get("links") if isinstance(record.get("links"), dict) else {}
+        source_url = record.get("url") or links.get("HTML") or links.get("WORD") or links.get("PDF")
+        return LegalMarkdownProcessor._normalize_metadata(
+            {
+                "issuing_authority": record.get("office"),
+                "document_number": record.get("document_number") or record.get("number"),
+                "promulgation_date": record.get("publish"),
+                "effective_date": record.get("effective_date") or record.get("effective"),
+                "expiration_date": record.get("expiry") or record.get("expiration_date"),
+                "legal_status": record.get("status"),
+                "revision_version": record.get("revision_version") or record.get("version"),
+                "last_updated_at": record.get("last_updated_at") or record.get("updated_at"),
+                "source_url": source_url,
+                "jurisdiction": record.get("jurisdiction"),
+                "source_record_id": record.get("id"),
+            }
+        )
+
+    @staticmethod
+    def _normalize_metadata(
+        metadata: Mapping[str, Any] | None = None, source_sha256: str | None = None
+    ) -> dict[str, str]:
+        metadata = metadata or {}
+        normalized = {field: "" if metadata.get(field) is None else str(metadata.get(field)) for field in LEGAL_METADATA_FIELDS}
+        normalized["source_sha256"] = source_sha256 or str(metadata.get("source_sha256", ""))
+        if metadata.get("source_record_id") is not None:
+            normalized["source_record_id"] = str(metadata["source_record_id"])
+        return normalized
+
+    @staticmethod
+    def _file_sha256(path: Path) -> str:
+        digest = sha256()
+        with path.open("rb") as file:
+            for block in iter(lambda: file.read(1024 * 1024), b""):
+                digest.update(block)
+        return digest.hexdigest()
 
     def _split_long_article(self, article_text: str) -> list[str]:
         paragraphs = [paragraph.strip() for paragraph in re.split(r"\n\s*\n", article_text) if paragraph.strip()]

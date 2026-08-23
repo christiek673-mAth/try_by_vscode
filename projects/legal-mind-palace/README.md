@@ -1,24 +1,34 @@
 # 法律知识殿堂（Legal Mind Palace）
 
-面向法律工作者的个人知识殿堂第一期：以中国法律法规 Markdown 为知识源，构建**不丢失法条层级上下文**的检索增强生成（RAG）核心。
+一个面向中文法律法规的本地 RAG（检索增强生成）工具。它把法规按**条**解析并保留完整的“法律 → 编 → 章 → 节 → 条”路径，再使用 Chroma 向量库检索相关法条，最后交给 DeepSeek、Qwen 或其他 OpenAI 兼容模型生成分析结果。
 
-项目针对 `twang2218/chinese-law-and-regulations` 风格的法规 Markdown 设计，但不会假定该仓库的固定目录或标题级别：解析器会同时识别 Markdown 标题和正文中的 `第一编`、`第二章`、`第三节`、`第十八条`、`第十条之一` 等结构。
+> **重要提示**：本项目仅用于法条检索和研究辅助，不构成法律意见。法规文本、效力状态、版本和模型输出均须由具备资质的法律专业人士，依据权威来源独立核验。
 
-> 法律提示：本项目是法条检索与研究辅助工具，不构成法律意见。输出必须由具备资质的法律专业人士独立复核。
+## 特性
 
-## 设计目标
+- **按法条索引**：默认不会用通用文本切分器将一条法规截断；超长条文才会在段落或句子边界切分。
+- **保留层级上下文**：每个片段都会带上法律名称、编、章、节、条号，既写入向量文本，也传给模型。
+- **兼容多种语料**：支持 `.md`、`.markdown`、`laws.json` 和 `laws.json.zip`。
+- **识别常见法规结构**：支持 `第一编`、`第二章`、`第三节`、`第十八条`、`第十条之一`，以及 `总则`、`附则` 等无编号标题。
+- **保存来源元数据**：可保存发布机关、文号、公布/施行/失效日期、效力状态、版本、权威 URL、来源文件哈希等。
+- **增量建库**：未变更的来源自动跳过；变更来源会替换旧向量；从语料目录删除的来源会清理对应向量。
+- **可追溯回答**：传入模型的检索上下文包含来源路径、权威来源 URL、效力状态和完整层级路径。
+
+## 工作流程
 
 ```text
-法规 Markdown
-  ↓  解析编 / 章 / 节 / 条（不按固定字符数直接腰斩法条）
-完整法条 Document + 层级路径注入
-  ↓  BGE 中文向量化
-ChromaDB 持久化索引
-  ↓  Top-K 检索、来源与完整层级保留
-LCEL Prompt → DeepSeek / Qwen 等 OpenAI 兼容模型
+法规文件（Markdown / laws.json / laws.json.zip）
+                 ↓
+         按编、章、节、条解析
+                 ↓
+  带完整层级与来源元数据的 Document
+                 ↓
+      BGE 中文嵌入 → Chroma 向量库
+                 ↓
+       检索法条 → OpenAI 兼容模型回答
 ```
 
-每个进入向量库的片段都具有以下形态：
+例如，`第十八条` 进入向量库时会包含完整语义归属：
 
 ```text
 【法律层级】中华人民共和国民法典 > 第一编 总则 > 第二章 自然人 > 第一节 民事权利能力和民事行为能力 > 第十八条
@@ -27,105 +37,262 @@ LCEL Prompt → DeepSeek / Qwen 等 OpenAI 兼容模型
 成年人为完全民事行为能力人，可以独立实施民事法律行为。
 ```
 
-层级路径不仅保存在 metadata，也强制写入 embedding 文本和 LLM 上下文。因此单条“第十八条”不会脱离其所属法律、编、章、节而被误解。
+这样即使不同法规中存在相同条号，检索与回答也不会丢失所属法律和目录上下文。
 
-## 核心保障
+## 快速开始
 
-1. **条级切分优先**：一条法条及其段落默认是一个完整检索单元，不使用通用 CharacterSplitter 截断。
-2. **父级上下文继承**：处理 `编 → 章 → 节 → 条` 时，下级目录切换会自动清空失效的后代节点，避免把上一章的节错误带入下一章。
-3. **超长条文保护**：只有超出 `max_article_chars` 的单条法规才会在段落边界切分；所有子片段都会重复包含完整层级和条号。极端长的单段落才按中文句末标点切分。
-4. **幂等索引 ID**：文档 ID 基于来源、层级、分片序号和内容的 SHA-256，重复执行增量索引不会随机生成重复条目。全量重建使用 `--reset`。
-5. **可审计回答**：模型上下文包含每条依据的原始来源相对路径、层级路径和增强后的条文；系统提示禁止捏造法条。
+### 1. 安装
 
-## 安装
-
-本项目需要 Python 3.10+（推荐 Python 3.11）。在项目目录中执行：
+需要 Python 3.10+，推荐 Python 3.11。
 
 ```bash
-cd /Users/chengjing/Documents/RAG/try_by_vscode/projects/legal-mind-palace
+git clone https://github.com/christiek673-mAth/try_by_vscode.git
+cd try_by_vscode/projects/legal-mind-palace
+
 python3 -m venv .venv
-. .venv/bin/activate
+source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements-dev.txt
 ```
 
-`sentence-transformers` 首次构建索引时会下载 `BAAI/bge-small-zh-v1.5`。默认使用 CPU；有可用 GPU/MPS 时通过 `--device cuda` 或 `--device mps` 指定。
+首次构建索引时，`sentence-transformers` 会下载默认嵌入模型 `BAAI/bge-small-zh-v1.5`。默认使用 CPU；如环境已正确安装相应 PyTorch 支持，可在命令中使用 `--device cuda` 或 `--device mps`。
 
-## 准备法规语料
+### 2. 准备语料
 
-将已获得的法规 Markdown 仓库放在任意本地目录。例如：
+将已获授权且已核验的法规文件放在一个目录中，例如：
 
-```bash
-git clone <你有权限访问的法规 Markdown 仓库地址> /path/to/chinese-law-and-regulations
+```text
+my-laws/
+├── 法律/
+│   └── 中华人民共和国民法典.md
+└── 行政法规/
+    └── 示例条例.markdown
 ```
 
-截至本项目创建时，`https://github.com/twang2218/chinese-law-and-regulations` 返回仓库不存在/不可访问，因此没有把网络克隆命令写死为可执行依赖，也没有在本仓库提交第三方法规原文。待确认实际可访问的上游地址和许可后，将其目录传给索引命令即可。
+也可以直接使用目录中的 `laws.json` 或 `laws.json.zip`。程序会递归扫描以下文件：
 
-## 构建向量索引
+```text
+*.md
+*.markdown
+laws.json
+laws.json.zip
+```
+
+### 3. 首次构建索引
+
+将 `/path/to/my-laws` 替换为你的法规根目录：
 
 ```bash
-cd /Users/chengjing/Documents/RAG/try_by_vscode/projects/legal-mind-palace
-
 python -m app.cli index \
-  --source-dir /path/to/chinese-law-and-regulations \
+  --source-dir /path/to/my-laws \
   --db-dir data/chroma \
   --reset
 ```
 
-也可通过 Makefile：
+成功后，索引保存在 `data/chroma/`。该目录已被 `.gitignore` 忽略，不会提交向量库或法规副本。
+
+### 4. 配置模型并提问
+
+项目使用 `langchain-openai`，支持 DeepSeek、Qwen 等 OpenAI API 兼容服务。
+
+以 DeepSeek 为例：
 
 ```bash
-LAW_SOURCE_DIR=/path/to/chinese-law-and-regulations make index
-```
-
-索引默认持久化到 `data/chroma/`，该目录已被项目级 `.gitignore` 排除，不应提交 BGE 缓存、向量库或法规数据副本。
-
-## 法律问答
-
-本程序使用 `langchain-openai`，因而兼容 DeepSeek、Qwen 等 OpenAI API 格式服务。
-
-### DeepSeek 示例
-
-```bash
-export LEGAL_LLM_API_KEY='你的 DeepSeek API Key'
+export LEGAL_LLM_API_KEY='你的 API Key'
 export LEGAL_LLM_BASE_URL='https://api.deepseek.com/v1'
 export LEGAL_LLM_MODEL='deepseek-chat'
 
 python -m app.cli query \
   --db-dir data/chroma \
-  --question '17岁的小明以劳动收入为主要生活来源，独立购买手机的合同效力应如何分析？'
+  --question '17岁且以劳动收入为主要生活来源的人独立购买手机，合同效力应如何分析？'
 ```
 
-### Qwen/OpenAI 兼容服务示例
+如使用其他兼容服务，只需替换上述三个环境变量：
 
 ```bash
 export LEGAL_LLM_API_KEY='你的 API Key'
 export LEGAL_LLM_BASE_URL='服务商提供的 OpenAI 兼容地址'
 export LEGAL_LLM_MODEL='服务商模型名'
-
-python -m app.cli query --question '请说明限制民事行为能力人的法律依据。'
 ```
 
-可通过 `--top-k 5` 调整召回数。回答会要求模型使用“规则（大前提）—事实适用（小前提）—暂定结论”结构；没有检索依据时，模型必须说明证据不足而不是补造法条。
+## 常用命令
+
+### 日常更新索引
+
+日常更新**不要**加 `--reset`。程序会根据 `data/chroma/index-manifest.json` 中保存的来源 SHA-256 判断变更：
+
+```bash
+python -m app.cli index --source-dir /path/to/my-laws --db-dir data/chroma
+```
+
+| 来源情况 | 执行行为 |
+| --- | --- |
+| 文件未变更 | 跳过，不重复写入 |
+| 文件已变更 | 删除该来源的旧向量，再写入新向量 |
+| 文件已从语料目录删除 | 删除该来源遗留的向量 |
+| 需要彻底重建 | 加 `--reset` |
+
+### 指定检索数量和模型设备
+
+```bash
+# 返回前 8 条检索结果
+python -m app.cli query --db-dir data/chroma --top-k 8 --question '你的问题'
+
+# 使用 Apple Silicon MPS 或 CUDA 建库（需环境支持）
+python -m app.cli --device mps index --source-dir /path/to/my-laws
+python -m app.cli --device cuda index --source-dir /path/to/my-laws
+```
+
+### 使用 Makefile
+
+```bash
+# 安装开发依赖、运行检查
+make install
+make check
+
+# 建库和提问
+LAW_SOURCE_DIR=/path/to/my-laws make index
+QUESTION='限制民事行为能力人的法律依据是什么？' make query
+```
+
+## Markdown 语料格式
+
+支持标准 Markdown 标题和正文形式的法规目录。以下是推荐写法：
+
+```markdown
+# 示例法
+
+## 第一编 总则
+
+### 第一章 一般规定
+
+#### 第一条
+为了规范示例事项，制定本法。
+
+#### 第二条
+本法适用于示例活动。
+```
+
+无编号目录同样支持：
+
+```markdown
+# 示例条例
+
+## 总则
+
+### 第一条
+本条例适用于示例事项。
+
+## 附则
+
+### 第二条
+本条例自公布之日起施行。
+```
+
+程序还可以识别没有 `#` 的 `第一章`、`第一条` 等正文行，以及 `第十条之一` 形式的条文编号。
+
+## 法规元数据（可选）
+
+对于 Markdown 语料，可通过 `--metadata-file` 提供来源级元数据。创建一个 JSON 文件，键必须是相对于 `--source-dir` 的路径：
+
+```json
+{
+  "法律/中华人民共和国民法典.md": {
+    "issuing_authority": "全国人民代表大会",
+    "document_number": "中华人民共和国主席令第四十五号",
+    "promulgation_date": "2020-05-28",
+    "effective_date": "2021-01-01",
+    "expiration_date": "",
+    "legal_status": "现行有效",
+    "revision_version": "2020年制定",
+    "last_updated_at": "2026-08-23",
+    "source_url": "https://权威来源.example/",
+    "jurisdiction": "中华人民共和国"
+  }
+}
+```
+
+建库时传入该文件：
+
+```bash
+python -m app.cli index \
+  --source-dir /path/to/my-laws \
+  --metadata-file /path/to/law-metadata.json \
+  --db-dir data/chroma
+```
+
+支持的字段如下：
+
+| 字段 | 含义 |
+| --- | --- |
+| `issuing_authority` | 发布机关 |
+| `document_number` | 文号 |
+| `promulgation_date` | 公布日期 |
+| `effective_date` / `expiration_date` | 施行 / 失效日期 |
+| `legal_status` | 效力状态 |
+| `revision_version` / `last_updated_at` | 修订版本 / 上游更新时间 |
+| `source_url` | 权威来源 URL |
+| `jurisdiction` | 管辖区域 |
+
+空字段表示来源未提供。项目只保存这些值，**不会自动判断法规是否现行有效**；请由语料导入者负责核验。
+
+## `laws.json` / `laws.json.zip` 语料
+
+程序兼容包含法规数组的 JSON 快照，并会读取常见字段：
+
+| JSON 字段 | 保存为的元数据 |
+| --- | --- |
+| `title` | 法律名称 |
+| `office` | `issuing_authority` |
+| `publish` | `promulgation_date` |
+| `expiry` | `expiration_date` |
+| `status` | `legal_status`（保留原始值） |
+| `url` | `source_url` |
+| `id` | `source_record_id` |
+| `content` | Markdown 形式的法规正文 |
+
+如果使用 Git LFS 管理的 ZIP 文件，必须先安装并执行 `git lfs pull`。未拉取 LFS 对象时，本地只有一个文本指针，无法建立索引。
+
+## 关于 `twang2218/law-datasets` 快照
+
+已确认可访问的候选仓库为 https://github.com/twang2218/law-datasets ，其 `law-and-regulations/laws.json.zip` 为 Git LFS 文件，仓库采集脚本指向 [全国人大法律法规库](https://flk.npc.gov.cn/)。可在已完成合规确认后按以下方式获取：
+
+```bash
+git lfs install
+git clone https://github.com/twang2218/law-datasets.git /path/to/law-datasets
+cd /path/to/law-datasets && git lfs pull
+```
+
+**请在使用前注意以下限制：**
+
+1. 该候选仓库在确认时未声明许可证，且未发现 `LICENSE`、`COPYING` 或 `NOTICE` 文件；使用、再分发或商用前必须自行获得明确授权并核验来源平台规则。
+2. 已记录的候选快照提交为 `d8df38c4578f0b5627b51da29ede0f8cfeb98302`，时间为 `2023-09-02T20:09:13Z`，不能代表当前有效法规或权威发布版本。
+3. 项目不提交第三方法规原文、LFS 数据或生成的向量库。生产场景应接入已获授权、可持续更新的权威数据源，并逐条复核法律状态。
 
 ## 项目结构
 
 ```text
-projects/legal-mind-palace/
+legal-mind-palace/
 ├── app/
-│   ├── markdown_processor.py  # 法规目录树、条文级解析、层级注入
-│   ├── rag.py                 # Chroma、BGE、LCEL RAG 链
-│   └── cli.py                 # index / query 命令行入口
-├── tests/
-├── Makefile
-├── requirements.txt
-└── README.md
+│   ├── cli.py                 # index / query 命令行入口
+│   ├── markdown_processor.py  # 法规解析、层级和元数据处理
+│   └── rag.py                 # 嵌入、Chroma 索引和问答链
+├── tests/                     # 单元测试
+├── requirements.txt           # 运行依赖
+├── requirements-dev.txt       # 开发与测试依赖
+└── Makefile                   # 常用命令
 ```
 
-## 开发验证
+## 开发与验证
 
 ```bash
 make check
 ```
 
-该命令执行 Ruff、Pytest、Python 编译检查以及 Git whitespace 检查。
+该命令会执行 Ruff、Pytest、Python 编译检查和 Git whitespace 检查。
+
+## 当前验证范围
+
+已通过单元测试验证：Markdown/JSON 快照解析、无编号目录、法规元数据、增量索引清单、变更/删除来源的处理和 CLI 元数据加载。
+
+当前开发环境尚未安装 Git LFS、Chroma、HuggingFace 嵌入模型或 `sentence-transformers`，因此尚未对真实 LFS 全量语料完成 BGE/Chroma 端到端建库，也未执行真实模型 API 调用。使用前请在目标环境中完成依赖安装和端到端验收。
