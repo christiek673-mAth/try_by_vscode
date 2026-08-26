@@ -1,0 +1,59 @@
+# 仅记录用于人工检索和交叉核验的官方来源入口，不表示获得自动抓取、批量下载或再分发许可。
+# 导入法规正文前，应逐页核对站点规则、具体文本版本、效力状态与组织的使用授权。
+sources:
+  - id: national-laws-and-regulations-database
+    name: 国家法律法规数据库
+    organization: 全国人民代表大会常务委员会法制工作委员会
+    url: https://flk.npc.gov.cn/
+    scope: 中央法律、行政法规、地方性法规、自治条例和单行条例、经济特区法规、司法解释等
+    priority: primary
+    use_note: P0 中央法律的首选核验来源；请保存具体法规详情页 URL，而非仅保存入口页。
+    redistribution_note: 未确认公开的批量下载、自动抓取或全文再分发许可；正文仅在已获授权的本地环境保存。
+  - id: chinese-government-portal
+    name: 中国政府网
+    organization: 国务院办公厅
+    url: https://www.gov.cn/
+    scope: 国务院发布文件、政策文件和法规发布信息
+    priority: supplementary
+    use_note: 作为国务院文件和公告的补充来源，并与国家法律法规数据库交叉核验。
+    redistribution_note: 访问公开页面不当然构成批量获取或全文再分发授权。
+  - id: state-council-gazette
+    name: 国务院公报
+    organization: 国务院办公厅
+    url: https://www.gov.cn/gongbao/
+    scope: 国务院公报刊载的行政法规、决定和其他文件
+    priority: supplementary
+    use_note: 用于法规公报版本与发布日期交叉核验。
+    redistribution_note: 访问公开页面不当然构成批量获取或全文再分发授权。
+  - id: supreme-peoples-court
+    name: 中华人民共和国最高人民法院
+    organization: 最高人民法院
+    url: https://www.court.gov.cn/
+    scope: 司法解释、审判规范性文件及公告
+    priority: supplementary
+    use_note: 司法解释以该机关官方发布内容交叉核验。
+    redistribution_note: 访问公开页面不当然构成批量获取或全文再分发授权。
+  - id: supreme-peoples-procuratorate
+    name: 中华人民共和国最高人民检察院
+    organization: 最高人民检察院
+    url: https://www.spp.gov.cn/
+    scope: 检察规范性文件及公告
+    priority: supplementary
+    use_note: 仅作为最高检官方发布内容的核验来源。
+    redistribution_note: 页面提示未经书面授权不得转载、摘编或建立镜像；不得抓取或再分发全文。
+  - id: ministry-of-justice
+    name: 中华人民共和国司法部
+    organization: 司法部
+    url: https://www.moj.gov.cn/
+    scope: 部门规章、立法信息、行政复议相关信息
+    priority: supplementary
+    use_note: 部门规章及司法行政领域法规信息的补充来源。
+    redistribution_note: 访问公开页面不当然构成批量获取或全文再分发授权。
+  - id: local-peoples-congress-and-government-sites
+    name: 地方人大和地方人民政府官方网站
+    organization: 各地方立法与行政机关
+    url: ""
+    scope: 地方性法规、地方政府规章
+    priority: supplementary
+    use_note: 后续纳入地方性法规时必须指定 jurisdiction，并记录具体官方详情页 URL。
+    redistribution_note: 逐站确认使用规则和授权；不得与中央法律无差别混合建库。

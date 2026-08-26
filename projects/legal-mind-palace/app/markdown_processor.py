@@ -25,6 +25,7 @@ DIVISION_PATTERN = re.compile(
 DIVISION_KEYS = {"编": "part", "章": "chapter", "节": "section"}
 HEADING_LEVEL_KEYS = {2: "part", 3: "chapter", 4: "section"}
 LEGAL_METADATA_FIELDS = (
+    "legal_level",
     "issuing_authority",
     "document_number",
     "promulgation_date",
@@ -33,8 +34,11 @@ LEGAL_METADATA_FIELDS = (
     "legal_status",
     "revision_version",
     "last_updated_at",
+    "verified_at",
     "source_url",
+    "source_name",
     "jurisdiction",
+    "license_note",
 )
 
 

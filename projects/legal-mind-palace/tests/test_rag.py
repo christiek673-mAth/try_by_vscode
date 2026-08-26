@@ -1,8 +1,10 @@
 from pathlib import Path
 
+import pytest
+
 from langchain_core.documents import Document
 
-from app.rag import LegalRAGPipeline
+from app.rag import IndexProfileMismatchError, LegalRAGPipeline
 
 
 def test_format_documents_keeps_source_hierarchy_and_enriched_content():
@@ -13,7 +15,8 @@ def test_format_documents_keeps_source_hierarchy_and_enriched_content():
 
     context = LegalRAGPipeline.format_documents([document])
 
-    assert "--- [法条依据 1] ---" in context
+    assert "--- [法条依据 1 / C1] ---" in context
+    assert "引用资料" in context
     assert "来源: 法律/民法典.md" in context
     assert "层级路径: 中华人民共和国民法典 > 第一编 总则 > 第十八条" in context
     assert document.page_content in context
@@ -83,8 +86,49 @@ def test_incremental_index_replaces_changed_source_and_removes_deleted_source(tm
 
 def test_reset_allows_an_empty_source_set_and_replaces_manifest(tmp_path):
     pipeline = LegalRAGPipeline(persist_directory=tmp_path / "chroma")
-    pipeline.persist_directory.mkdir()
-    pipeline.manifest_path.write_text('{"old.md": {}}', encoding="utf-8")
+    pipeline.manifest_path.parent.mkdir(parents=True)
+    pipeline.manifest_path.write_text(
+        '{"schema_version": 2, "profile": {}, "sources": {"old.md": {}}}', encoding="utf-8"
+    )
 
     assert pipeline.build_vector_store([], reset=True) == 0
-    assert pipeline.manifest_path.read_text(encoding="utf-8") == "{}\n"
+    assert '"sources": {}' in pipeline.manifest_path.read_text(encoding="utf-8")
+
+
+def test_incremental_index_reindexes_when_legal_metadata_changes(tmp_path, monkeypatch):
+    stores: list[FakeVectorStore] = []
+
+    def chroma_class(**_kwargs):
+        store = FakeVectorStore()
+        stores.append(store)
+        return store
+
+    pipeline = LegalRAGPipeline(persist_directory=tmp_path / "chroma")
+    monkeypatch.setattr(pipeline, "_chroma_class", lambda: chroma_class)
+    monkeypatch.setattr(type(pipeline), "embeddings", property(lambda _self: object()))
+    old = Document(
+        page_content="第一条",
+        metadata={"source": "a.md", "source_sha256": "same", "document_id": "1", "legal_status": "现行有效"},
+    )
+    new = Document(
+        page_content="第一条",
+        metadata={"source": "a.md", "source_sha256": "same", "document_id": "2", "legal_status": "已废止"},
+    )
+
+    pipeline.build_vector_store([old])
+    pipeline.build_vector_store([new])
+
+    assert stores[1].deleted_sources == ["a.md"]
+    assert stores[1].added_ids == ["2"]
+
+
+def test_index_profile_change_requires_reset(tmp_path, monkeypatch):
+    pipeline = LegalRAGPipeline(persist_directory=tmp_path / "chroma")
+    monkeypatch.setattr(pipeline, "_chroma_class", lambda: lambda **_kwargs: FakeVectorStore())
+    monkeypatch.setattr(type(pipeline), "embeddings", property(lambda _self: object()))
+    document = Document(page_content="第一条", metadata={"source": "a.md", "source_sha256": "one", "document_id": "1"})
+    pipeline.build_vector_store([document])
+    changed = LegalRAGPipeline(persist_directory=tmp_path / "chroma", max_article_chars=900)
+
+    with pytest.raises(IndexProfileMismatchError, match="索引配置"):
+        changed.build_vector_store([document])

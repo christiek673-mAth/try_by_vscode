@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>法律知识殿堂</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <p class="eyebrow">LEGAL MIND PALACE</p>
+        <h1>法律知识殿堂</h1>
+        <p class="subtitle">基于已授权法规语料的可追溯法律检索辅助</p>
+      </header>
+      <section class="notice">
+        <strong>使用提示：</strong>回答仅基于本地已索引语料，不构成法律意见。请依据权威来源和案件事实进行独立核验。
+      </section>
+      <section id="status" class="status" aria-live="polite">正在检查索引状态…</section>
+      <section id="conversation" class="conversation" aria-live="polite">
+        <article class="empty-state">请输入法律问题。系统将展示答案及实际检索到的法规来源。</article>
+      </section>
+      <form id="chat-form" class="composer">
+        <label for="question">法律问题</label>
+        <textarea id="question" rows="4" maxlength="4000" required placeholder="例如：17 岁且以劳动收入为主要生活来源的人购买手机，合同效力应如何分析？"></textarea>
+        <div class="controls">
+          <label>召回条数 <select id="top-k"><option>3</option><option selected>5</option><option>8</option></select></label>
+          <label>效力状态（可选）<input id="legal-status" maxlength="60" placeholder="如：现行有效"></label>
+          <button id="submit" type="submit">开始分析</button>
+        </div>
+      </form>
+    </main>
+    <template id="message-template"><article class="message"><h2></h2><div class="content"></div></article></template>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+  </body>
+</html>

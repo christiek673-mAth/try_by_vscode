@@ -1,0 +1,17 @@
+:root { color-scheme: light; font-family: "Noto Serif SC", "Songti SC", Georgia, serif; color: #18201b; background: #f4f0e8; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+.shell { max-width: 980px; margin: 0 auto; padding: 44px 20px 72px; }
+header { border-bottom: 2px solid #9a7b42; padding-bottom: 24px; }
+.eyebrow { margin: 0; color: #876a35; font: 700 .72rem/1.4 ui-sans-serif, sans-serif; letter-spacing: .15em; }
+h1 { margin: 8px 0; font-size: clamp(2rem, 5vw, 3.5rem); }
+.subtitle { margin: 0; color: #536057; }
+.notice, .status, .message, .citations { margin-top: 18px; padding: 16px 18px; border-radius: 8px; background: #fffdf8; box-shadow: 0 3px 16px #382c1814; }
+.notice { border-left: 4px solid #9a7b42; font: .9rem/1.6 ui-sans-serif, sans-serif; }
+.status { color: #315d43; font: .9rem ui-sans-serif, sans-serif; }.status.error, .error { color: #9d302d; }
+.conversation { min-height: 200px; }.empty-state { color: #657068; padding: 26px 0; text-align: center; }
+.message h2, .citations h3 { margin: 0 0 10px; font-size: 1.05rem; }.message.user { border-left: 4px solid #557565; }.message.assistant { border-left: 4px solid #9a7b42; }
+.content { white-space: pre-wrap; line-height: 1.8; }.composer { margin-top: 22px; padding: 18px; border: 1px solid #d5c8af; border-radius: 8px; background: #eae2d3; }.composer label { display: block; margin-bottom: 8px; font: 700 .9rem ui-sans-serif, sans-serif; }
+textarea, input, select { width: 100%; padding: 10px; border: 1px solid #b8aa91; border-radius: 5px; background: #fffdf8; font: inherit; }.controls { display: grid; grid-template-columns: 110px minmax(180px, 1fr) auto; gap: 12px; align-items: end; margin-top: 12px; }.controls label { margin: 0; font-weight: 400; } button { padding: 11px 18px; border: 0; border-radius: 5px; background: #315d43; color: white; font: 700 .95rem ui-sans-serif, sans-serif; cursor: pointer; }button:disabled { opacity: .6; cursor: wait; }
+.citation { margin-top: 12px; padding-top: 12px; border-top: 1px solid #dfd4c0; }.citation p { color: #5e665f; font: .8rem ui-sans-serif, sans-serif; }.citation a { color: #315d43; }.citation pre { max-height: 220px; overflow: auto; padding: 10px; background: #f4f0e8; white-space: pre-wrap; font: .82rem/1.6 ui-monospace, monospace; }
+@media (max-width: 620px) { .shell { padding: 28px 14px; }.controls { grid-template-columns: 1fr; } button { width: 100%; } }

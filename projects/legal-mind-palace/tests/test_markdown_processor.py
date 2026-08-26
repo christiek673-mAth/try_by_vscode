@@ -121,6 +121,9 @@ def test_processor_keeps_unnumbered_markdown_divisions_and_source_metadata():
             "effective_date": "2026-01-01",
             "legal_status": "现行有效",
             "source_url": "https://example.test/law",
+            "legal_level": "法律",
+            "verified_at": "2026-08-25",
+            "license_note": "仅限内部研究使用。",
             "source_sha256": "source-hash",
         },
     )
@@ -131,6 +134,9 @@ def test_processor_keeps_unnumbered_markdown_divisions_and_source_metadata():
     assert documents[0].metadata["effective_date"] == "2026-01-01"
     assert documents[0].metadata["legal_status"] == "现行有效"
     assert documents[0].metadata["source_url"] == "https://example.test/law"
+    assert documents[0].metadata["legal_level"] == "法律"
+    assert documents[0].metadata["verified_at"] == "2026-08-25"
+    assert documents[0].metadata["license_note"] == "仅限内部研究使用。"
     assert documents[0].metadata["source_sha256"] == "source-hash"
 
 
